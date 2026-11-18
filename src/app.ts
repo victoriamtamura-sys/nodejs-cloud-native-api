@@ -1,0 +1,18 @@
+import express from "express";
+import pino from "pino";
+import pinoHttp from "pino-http";
+import {z} from "zod";
+import {pool} from "./db.js";
+const log=pino();
+export const app=express();
+app.disable("x-powered-by"); app.use(express.json({limit:"1mb"})); app.use(pinoHttp({logger:log}));
+app.get("/health",(_q,r)=>r.json({status:"ok"}));
+app.get("/health/ready",async(_q,r)=>{try{await pool.query("SELECT 1");r.json({status:"ready"});}catch{r.status(503).json({status:"unavailable"});}});
+const schema=z.object({title:z.string().trim().min(3).max(120),description:z.string().max(2000).optional()});
+app.get("/api/v1/tasks",async(_q,r,n)=>{try{const x=await pool.query("SELECT id,title,description,completed,created_at FROM tasks ORDER BY id DESC");r.json({data:x.rows});}catch(e){n(e);}});
+app.post("/api/v1/tasks",async(q,r,n)=>{const p=schema.safeParse(q.body);if(!p.success)return r.status(400).json({error:"Validation failed",details:p.error.flatten()});try{const x=await pool.query("INSERT INTO tasks(title,description) VALUES($1,$2) RETURNING *",[p.data.title,p.data.description??null]);r.status(201).json({data:x.rows[0]});}catch(e){n(e);}});
+app.get("/api/v1/tasks/:id",async(q,r,n)=>{const id=z.coerce.number().int().positive().safeParse(q.params.id);if(!id.success)return r.status(400).json({error:"Invalid id"});try{const x=await pool.query("SELECT * FROM tasks WHERE id=$1",[id.data]);if(!x.rowCount)return r.status(404).json({error:"Task not found"});r.json({data:x.rows[0]});}catch(e){n(e);}});
+app.patch("/api/v1/tasks/:id",async(q,r,n)=>{const id=z.coerce.number().int().positive().safeParse(q.params.id);const p=z.object({title:z.string().trim().min(3).max(120).optional(),description:z.string().max(2000).nullable().optional(),completed:z.boolean().optional()}).strict().safeParse(q.body);if(!id.success||!p.success||!Object.keys(p.data??{}).length)return r.status(400).json({error:"Invalid id or payload"});try{const old=await pool.query("SELECT * FROM tasks WHERE id=$1",[id.data]);if(!old.rowCount)return r.status(404).json({error:"Task not found"});const t={...old.rows[0],...p.data};const x=await pool.query("UPDATE tasks SET title=$1,description=$2,completed=$3 WHERE id=$4 RETURNING *",[t.title,t.description,t.completed,id.data]);r.json({data:x.rows[0]});}catch(e){n(e);}});
+app.delete("/api/v1/tasks/:id",async(q,r,n)=>{const id=z.coerce.number().int().positive().safeParse(q.params.id);if(!id.success)return r.status(400).json({error:"Invalid id"});try{const x=await pool.query("DELETE FROM tasks WHERE id=$1",[id.data]);if(!x.rowCount)return r.status(404).json({error:"Task not found"});r.status(204).end();}catch(e){n(e);}});
+app.use((_q,r)=>r.status(404).json({error:"Route not found"}));
+app.use((e:unknown,_q:express.Request,r:express.Response,_n:express.NextFunction)=>{log.error(e);r.status(500).json({error:"Internal server error"});});

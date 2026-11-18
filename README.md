@@ -1,22 +1,45 @@
-Este repositório contém uma API RESTful em Node.js (TypeScript) com conteinerização, manifestos de orquestração para Kubernetes e pipeline automatizado de CI/CD.
+# Node.js Cloud Native API
 
-PT: Esta aplicação API RESTful foi construída para demonstrar arquitetura Cloud-Native, conteinerização com Docker (Multi-stage build), orquestração via Kubernetes (K8s) e automação de testes/deploy via GitHub Actions.
+API REST de gerenciamento de tarefas com Node.js 22, TypeScript, Express e PostgreSQL. O repositório demonstra organização de API, validação, persistência SQL, containerização e primeiros recursos cloud-native.
 
-Como Funciona 
-1-Ambiente Local (Docker Compose): O desenvolvedor executa o ambiente local com a API e o banco de dados PostgreSQL isolados em contêineres através de um único comando.
+## Recursos
+- CRUD de tarefas com validação Zod e consultas parametrizadas
+- PostgreSQL e migration SQL inicial
+- Health e readiness endpoints
+- Logs HTTP estruturados com Pino
+- Docker multi-stage e Docker Compose
+- Manifestos Kubernetes e pipeline GitHub Actions
 
-2-Construção da Imagem (Multi-stage Build): O Dockerfile realiza o build da aplicação separando o estágio de compilação do TypeScript do ambiente de execução, gerando uma imagem final leve e rodando com usuário sem privilégios de root.
+## Executar
+Requer Docker e Docker Compose:
+```bash
+docker compose up --build
+```
+API: http://localhost:3000
 
-3-Esteira de CI/CD (GitHub Actions): A cada Push ou Pull Request na branch main, a esteira automatizada executa verificação de código (lint), compilação do projeto e testes.
+Para execução local: copie `.env.example` para `.env`, instale dependências com `npm install`, crie o banco PostgreSQL e aplique `migrations/001_init.sql`; depois execute `npm run dev`.
 
-4-Orquestração no Kubernetes (K8s):
+## Endpoints
+| Verbo | Caminho | Ação |
+|---|---|---|
+| GET | /health | Liveness |
+| GET | /health/ready | Banco disponível |
+| GET | /api/v1/tasks | Listar |
+| POST | /api/v1/tasks | Criar |
+| GET | /api/v1/tasks/:id | Consultar |
+| PATCH | /api/v1/tasks/:id | Atualizar |
+| DELETE | /api/v1/tasks/:id | Excluir |
 
-5-ConfigMaps e Secrets: Injetam variáveis de ambiente e credenciais do banco de dados nos pods de forma desvinculada do código.
+Exemplo:
+```bash
+curl -X POST http://localhost:3000/api/v1/tasks -H 'Content-Type: application/json' -d '{"title":"Estudar TypeScript"}'
+```
 
-6-Deployments: Gerenciam réplicas da API garantindo atualizações sem pausa no serviço (Rolling Updates).
+## Verificações
+`npm run build`, `npm test`. O pipeline executa build e testes em push e pull request.
 
-7-Services: Expõem os pods internamente através de abstração de rede (ClusterIP).
+## Kubernetes
+Edite a imagem em `k8s/deployment.yaml`. Crie o Secret `node-api` com DATABASE_URL no cluster (não versionar credenciais) e aplique ConfigMap, Deployment e Service.
 
-8-Probes (Health Checks): O Kubernetes monitora o endpoint /health para restart automático em caso de travamentos (LivenessProbe) e liberação do tráfego apenas quando a API e o banco estiverem prontos (ReadinessProbe).
-
-9-Observabilidade e Logs: A API emite logs em formato JSON estruturado (via Pino.js) prontos para integração com ferramentas de monitoramento.
+## Próximos passos para produção
+Autenticação/autorização, rate limiting, política CORS restrita, migrações com ferramenta dedicada, métricas/alertas, backup e gestão externa de segredos. Esta é uma base demonstrativa, não uma implantação pronta para produção.
